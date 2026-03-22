@@ -20,6 +20,7 @@ export default defineConfig({
   expect: {
     timeout: 10000,
   },
+  globalSetup: './global-setup.js',
   use: {
     baseURL: process.env.BASE_URL || 'https://test-billing.empcloud.com',
     trace: 'on-first-retry',
@@ -30,13 +31,9 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'setup',
-      testMatch: /.*\.setup\.js/,
-    },
-    {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['setup'],
     },
   ],
+  testIgnore: ['**/*.setup.js'],
 });
