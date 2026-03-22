@@ -7,12 +7,17 @@ export async function login(page, credentials) {
 
   const email = page.locator('input[type="email"], input[name="email"]').first();
   const password = page.locator('input[type="password"]').first();
+  const signInButton = page.getByRole('button', { name: /sign in/i });
 
-  await expect(email).toBeVisible({ timeout: 30000 });
+  const emailVisible = await email.isVisible({ timeout: 5000 }).catch(() => false);
 
-  await safeFill(email, credentials.email, 'email');
-  await safeFill(password, credentials.password, 'password');
-  await safeClick(page.getByRole('button', { name: /sign in/i }), 'sign in button');
+  if (emailVisible) {
+    await safeFill(email, credentials.email, 'email');
+    await safeFill(password, credentials.password, 'password');
+    await safeClick(signInButton, 'sign in button');
+  } else {
+    await expect(page).toHaveURL(/dashboard|login/, { timeout: 30000 });
+  }
 
   await expect(page).toHaveURL(/dashboard/, { timeout: 60000 });
   console.log('Logged in successfully');

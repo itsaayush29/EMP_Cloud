@@ -1,4 +1,11 @@
 const timestamp = Date.now();
+const issueDate = new Date();
+const dueDate = new Date(issueDate);
+dueDate.setDate(dueDate.getDate() + 30);
+
+function formatDate(date) {
+  return date.toISOString().slice(0, 10);
+}
 
 export const testScenarios = {
   multipleItems: {
@@ -8,8 +15,8 @@ export const testScenarios = {
     },
     invoice: {
       clientIndex: 1,
-      issueDate: '2026-03-06',
-      dueDate: '2026-04-07',
+      issueDate: formatDate(issueDate),
+      dueDate: formatDate(dueDate),
       currency: 'EUR',
       reference: `MULTI-${timestamp}`,
       notes: 'Invoice with multiple line items',
