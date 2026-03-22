@@ -1,4 +1,3 @@
-// Test data for invoice creation
 export const invoiceData = {
   login: {
     email: 'admin@acme.com',
