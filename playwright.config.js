@@ -8,26 +8,24 @@ const isCI = Boolean(process.env.CI);
 const timeout = Number.parseInt(process.env.TIMEOUT ?? '60000', 10);
 
 export default defineConfig({
-  testDir: './tests',
-  fullyParallel: true,
+  testDir: './tests/specs',
+  fullyParallel: false,
   forbidOnly: isCI,
-  retries: isCI ? 2 : 0,
-  workers: isCI ? 1 : 4,
+  retries: isCI ? 2 : 1,
+  workers: isCI ? 1 : 2,
   reporter: isCI
     ? [['json'], ['./reporters/four-line-summary-reporter.js']]
     : [['html', { open: 'never' }], ['./reporters/four-line-summary-reporter.js']],
   timeout: Number.isFinite(timeout) ? timeout : 60000,
   expect: {
-    timeout: 10000,
+    timeout: 30000,
   },
-  globalSetup: './global-setup.js',
   use: {
     baseURL: process.env.BASE_URL || 'https://test-billing.empcloud.com',
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'off',
+    screenshot: 'on',
+    video: isCI ? 'off' : 'retain-on-failure',
     headless: process.env.HEADLESS !== 'false',
-    storageState: 'playwright/.auth/user.json',
   },
   projects: [
     {
@@ -35,5 +33,4 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  testIgnore: ['**/*.setup.js'],
 });

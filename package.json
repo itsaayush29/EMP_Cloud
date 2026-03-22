@@ -4,8 +4,9 @@
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
-    "test:invoice": "playwright test tests/invoice/",
-    "test:health": "playwright test tests/health-check.spec.js",
+    "test:health": "playwright test tests/specs/health/",
+    "test:invoice": "playwright test tests/specs/invoice/",
+    "test:vendor": "playwright test tests/specs/vendor/",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "test:ui": "playwright test --ui",
