@@ -12,16 +12,19 @@ test('Invoice Creation With Multiple Line Items', async ({ page }) => {
     console.log('Starting multiple-items invoice test...');
     await login(page, data.login);
 
+    console.log('Opening invoices module...');
     await safeClick(page.getByRole('link', { name: /invoices/i }), 'invoices link');
     await page.waitForLoadState('networkidle');
     await safeClick(page.getByRole('button', { name: /new invoice/i }), 'new invoice button');
 
+    console.log('Filling invoice details...');
     await page.getByLabel(/client/i).selectOption({ index: data.invoice.clientIndex });
     await safeFill(page.getByRole('textbox', { name: /issue date/i }), data.invoice.issueDate, 'issue date');
     await safeFill(page.getByRole('textbox', { name: /due date/i }), data.invoice.dueDate, 'due date');
     await page.getByLabel(/currency/i).selectOption(data.invoice.currency);
     await safeFill(page.getByRole('textbox', { name: /reference/i }), data.invoice.reference, 'reference');
 
+    console.log('Filling invoice line items...');
     for (const [index, item] of data.lineItems.entries()) {
       if (index > 0) {
         await safeClick(page.getByRole('button', { name: /add line item/i }), `add line item ${index + 1}`);
@@ -39,6 +42,7 @@ test('Invoice Creation With Multiple Line Items', async ({ page }) => {
     await safeFill(page.getByRole('textbox', { name: /field name/i }), data.invoice.customField.name, 'custom field name');
     await safeFill(page.getByRole('textbox', { name: /^value$/i }), data.invoice.customField.value, 'custom field value');
 
+    console.log('Submitting invoice...');
     const responsePromise = page.waitForResponse(
       (response) => response.url().includes('/invoices') && response.request().method() === 'POST',
       { timeout: 30000 }
@@ -54,6 +58,7 @@ test('Invoice Creation With Multiple Line Items', async ({ page }) => {
       const text = (await toast.textContent()) || '';
       console.log('Toast message:', text);
     } else {
+      console.log('Waiting for invoice page to settle...');
       await test.step('wait for invoice form to settle after successful creation', async () => {
         await page.waitForLoadState('networkidle').catch(() => {});
       });

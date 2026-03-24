@@ -10,16 +10,19 @@ test('Invoice Flow', async ({ page }) => {
     console.log('Starting invoice creation test...');
     await login(page, invoiceData.login);
 
+    console.log('Opening invoices module...');
     await safeClick(page.getByRole('link', { name: /invoices/i }), 'invoices link');
     await page.waitForLoadState('networkidle');
     await safeClick(page.getByRole('button', { name: /new invoice/i }), 'new invoice button');
 
+    console.log('Filling invoice details...');
     await page.getByLabel(/client/i).selectOption({ index: invoiceData.invoice.clientIndex });
     await safeFill(page.getByRole('textbox', { name: /issue date/i }), invoiceData.invoice.issueDate, 'issue date');
     await safeFill(page.getByRole('textbox', { name: /due date/i }), invoiceData.invoice.dueDate, 'due date');
     await page.getByLabel(/currency/i).selectOption(invoiceData.invoice.currency);
     await safeFill(page.getByRole('textbox', { name: /reference/i }), invoiceData.invoice.reference, 'reference');
 
+    console.log('Filling invoice line items...');
     await safeFill(page.getByRole('textbox', { name: /item name/i }), invoiceData.lineItems[0].name, 'item name');
     await safeFill(page.getByRole('textbox', { name: /description/i }), invoiceData.lineItems[0].description, 'description');
     await safeFill(page.getByPlaceholder('1', { exact: true }), invoiceData.lineItems[0].quantity, 'quantity');
@@ -37,6 +40,7 @@ test('Invoice Flow', async ({ page }) => {
     await safeFill(page.getByRole('textbox', { name: /field name/i }), invoiceData.invoice.customField.name, 'custom field name');
     await safeFill(page.getByRole('textbox', { name: /^value$/i }), invoiceData.invoice.customField.value, 'custom field value');
 
+    console.log('Submitting invoice...');
     const responsePromise = page.waitForResponse(
       (response) => response.url().includes('/invoices') && response.request().method() === 'POST',
       { timeout: 30000 }
@@ -52,6 +56,7 @@ test('Invoice Flow', async ({ page }) => {
       const text = (await toast.textContent()) || '';
       console.log('Toast message:', text);
     } else {
+      console.log('Waiting for invoice page to settle...');
       await test.step('wait for invoice form to close after successful creation', async () => {
         await page.waitForLoadState('networkidle').catch(() => {});
       });

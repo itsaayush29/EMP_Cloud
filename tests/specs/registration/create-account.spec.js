@@ -3,8 +3,10 @@ import { registrationScenarios } from '../../data/registration-scenarios.js';
 import { safeClick, safeFill } from '../../utils/ui-helpers.js';
 
 async function openRegistrationPage(page) {
+  console.log('Opening login page...');
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
+  console.log('Opening registration form...');
   await safeClick(page.getByRole('link', { name: /create one free/i }), 'create one free link');
   await expect(page.getByRole('heading', { name: /create account/i })).toBeVisible();
 }
@@ -58,6 +60,7 @@ test.describe('Registration Page Flow', () => {
       await fillRegistrationForm(page, registrationScenarios.validRegistration.user);
 
       await safeClick(page.getByRole('button', { name: /create free account/i }), 'create free account button');
+      console.log('Waiting for registration result...');
 
       const dashboardLink = page.getByRole('link', { name: /dashboard/i });
       const welcomeMessage = page.getByText(/welcome! your account is/i);

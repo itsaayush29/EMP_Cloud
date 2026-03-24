@@ -6,6 +6,7 @@ dotenv.config({ quiet: true });
 
 const isCI = Boolean(process.env.CI);
 const timeout = Number.parseInt(process.env.TIMEOUT ?? '60000', 10);
+const authFile = 'playwright/.auth/user.json';
 
 export default defineConfig({
   testDir: './tests/specs',
@@ -15,7 +16,11 @@ export default defineConfig({
   workers: isCI ? 1 : 2,
   reporter: isCI
     ? [['json'], ['./reporters/four-line-summary-reporter.js']]
-    : [['html', { open: 'never' }], ['./reporters/four-line-summary-reporter.js']],
+    : [
+        ['list', { printSteps: true }],
+        ['html', { open: 'never' }],
+        ['./reporters/four-line-summary-reporter.js'],
+      ],
   timeout: Number.isFinite(timeout) ? timeout : 60000,
   expect: {
     timeout: 30000,
@@ -29,16 +34,24 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
+      name: 'setup',
+      testMatch: /.*\.setup\.js/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      name: 'chromium',
+      dependencies: ['setup'],
+      testIgnore: [/registration\//, /health\//, /.*\.setup\.js/],
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: authFile,
+      },
     },
     {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      name: 'chromium-public',
+      testMatch: [/registration\/.*\.spec\.js/, /health\/.*\.spec\.js/],
+      testIgnore: [/.*\.setup\.js/],
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 });
