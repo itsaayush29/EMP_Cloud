@@ -1,7 +1,27 @@
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { testScenarios } from '../../data/invoice-scenarios.js';
-import { login } from '../../utils/auth.js';
-import { expectApiSuccess, safeClick, safeFill } from '../../utils/ui-helpers.js';
+import { safeClick, safeFill } from '../../utils/ui-helpers.js';
+
+async function selectFirstAvailableClient(page) {
+  const clientSelect = page.getByLabel(/client/i);
+  await expect(clientSelect).toBeVisible();
+
+  const options = await clientSelect.locator('option').evaluateAll((elements) =>
+    elements.map((option) => ({
+      value: option.value,
+      label: option.textContent?.trim() ?? '',
+      disabled: option.disabled,
+    }))
+  );
+
+  const selectedOption = options.find((option) => option.value && !option.disabled && !/select a client/i.test(option.label));
+  if (!selectedOption) {
+    throw new Error('No selectable client options were available in the invoice form.');
+  }
+
+  await clientSelect.selectOption(selectedOption.value);
+  console.log(`Selected invoice client: ${selectedOption.label}`);
+}
 
 test('Invoice Creation With Multiple Line Items', async ({ page }) => {
   test.setTimeout(120000);
@@ -10,7 +30,8 @@ test('Invoice Creation With Multiple Line Items', async ({ page }) => {
 
   try {
     console.log('Starting multiple-items invoice test...');
-    await login(page, data.login);
+    console.log('Opening dashboard with shared authenticated session...');
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     console.log('Opening invoices module...');
     await safeClick(page.getByRole('link', { name: /invoices/i }), 'invoices link');
@@ -18,7 +39,7 @@ test('Invoice Creation With Multiple Line Items', async ({ page }) => {
     await safeClick(page.getByRole('button', { name: /new invoice/i }), 'new invoice button');
 
     console.log('Filling invoice details...');
-    await page.getByLabel(/client/i).selectOption({ index: data.invoice.clientIndex });
+    await selectFirstAvailableClient(page);
     await safeFill(page.getByRole('textbox', { name: /issue date/i }), data.invoice.issueDate, 'issue date');
     await safeFill(page.getByRole('textbox', { name: /due date/i }), data.invoice.dueDate, 'due date');
     await page.getByLabel(/currency/i).selectOption(data.invoice.currency);
@@ -49,7 +70,9 @@ test('Invoice Creation With Multiple Line Items', async ({ page }) => {
     ).catch(() => null);
 
     await safeClick(page.getByRole('button', { name: /create invoice/i }), 'create invoice button');
-    await expectApiSuccess(responsePromise, 'Invoice');
+    const response = await responsePromise;
+    expect(response, 'Invoice API response was not captured.').not.toBeNull();
+    expect(response?.status()).toBe(201);
 
     const toast = page.locator('[role="status"]');
     const toastVisible = await toast.isVisible({ timeout: 15000 }).catch(() => false);

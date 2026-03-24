@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { vendorData } from '../../data/vendor-data.js';
-import { login } from '../../utils/auth.js';
-import { expectApiSuccess, expectSuccessToast, safeClick, safeFill } from '../../utils/ui-helpers.js';
+import { expectSuccessToast, safeClick, safeFill } from '../../utils/ui-helpers.js';
 
 test('Vendor Creation Flow', async ({ page }) => {
   test.setTimeout(120000);
 
   try {
     console.log('Starting vendor creation test...');
-    await login(page, vendorData.login);
+    console.log('Opening dashboard with shared authenticated session...');
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     await safeClick(page.getByRole('link', { name: /vendors/i }), 'vendors link');
     await page.waitForLoadState('networkidle');
@@ -34,7 +34,9 @@ test('Vendor Creation Flow', async ({ page }) => {
     ).catch(() => null);
 
     await safeClick(page.getByRole('button', { name: /create vendor/i }), 'create vendor button');
-    await expectApiSuccess(responsePromise, 'Vendor');
+    const response = await responsePromise;
+    expect(response, 'Vendor API response was not captured.').not.toBeNull();
+    expect(response?.status()).toBe(201);
 
     const toastVisible = await page.locator('[role="status"]').isVisible({ timeout: 15000 }).catch(() => false);
     if (toastVisible) {

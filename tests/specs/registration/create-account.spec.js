@@ -59,12 +59,17 @@ test.describe('Registration Page Flow', () => {
       await openRegistrationPage(page);
       await fillRegistrationForm(page, registrationScenarios.validRegistration.user);
 
+      const responsePromise = page.waitForResponse(
+        (response) => response.url().includes('/auth/register') && response.request().method() === 'POST',
+        { timeout: 30000 }
+      ).catch(() => null);
+
       await safeClick(page.getByRole('button', { name: /create free account/i }), 'create free account button');
       console.log('Waiting for registration result...');
 
-      const dashboardLink = page.getByRole('link', { name: /dashboard/i });
-      const welcomeMessage = page.getByText(/welcome! your account is/i);
-      await expect(dashboardLink.or(welcomeMessage).first()).toBeVisible({ timeout: 30000 });
+      const response = await responsePromise;
+      expect(response, 'Registration API response was not captured.').not.toBeNull();
+      expect(response?.status()).toBe(201);
     } catch (error) {
       console.error('Registration flow failed:', error.message);
       await page.screenshot({ path: `test-results/registration-error-${Date.now()}.png` });
