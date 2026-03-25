@@ -10,6 +10,7 @@ tests/
     client-data.js
     invoice-data.js
     payment-data.js
+    quote-data.js
     registration-data.js
     registration-scenarios.js
     vendor-data.js
@@ -22,6 +23,8 @@ tests/
       health-check.spec.js
     invoice/
       create-invoice.spec.js
+    quotes/
+      create-quote.spec.js
     payments/
       create-payment.spec.js
     registration/
@@ -63,6 +66,7 @@ Protected modules use a Playwright auth setup project that saves `storageState` 
 npm test
 npm run test:health
 npm run test:invoice
+npm run test:quotes
 npm run test:payments
 npm run test:registration
 npm run test:vendor
@@ -75,6 +79,7 @@ npm run report
 - `client`: authenticated client creation flow
 - `health`: basic application availability check
 - `invoice`: authenticated simple invoice creation flow
+- `quotes`: authenticated simple quote creation flow
 - `payments`: authenticated payment recording flow
 - `registration`: public registration page coverage with positive and validation scenarios
 - `vendor`: authenticated vendor creation flow
