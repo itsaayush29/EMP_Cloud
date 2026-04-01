@@ -4,22 +4,11 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "playwright test",
+    "test": "mocha tests/specs/auth/auth.setup.js --timeout 120000",
     "test:auth-setup": "mocha tests/specs/auth/auth.setup.js --timeout 120000",
-    "test:health": "playwright test tests/specs/health/",
-    "test:coupons": "playwright test tests/specs/coupons/",
-    "test:invoice": "playwright test tests/specs/invoice/",
-    "test:quotes": "playwright test tests/specs/quotes/",
-    "test:registration": "playwright test tests/specs/registration/",
-    "test:teams": "playwright test tests/specs/teams/",
-    "test:vendor": "playwright test tests/specs/vendor/",
-    "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug",
-    "test:ui": "playwright test --ui",
-    "test:smoke": "playwright test --grep @smoke",
-    "report": "playwright show-report",
-    "install:browsers": "playwright install chromium",
-    "test:ci": "playwright test --project=chromium --reporter=json"
+    "test:registration": "mocha tests/specs/registration/create-account.spec.js --timeout 120000",
+    "test:headed": "cross-env HEADLESS=false mocha tests/specs/auth/auth.setup.js --timeout 120000",
+    "test:headless": "cross-env HEADLESS=true mocha tests/specs/auth/auth.setup.js --timeout 120000"
   },
   "repository": {
     "type": "git",
@@ -34,8 +23,8 @@
   "homepage": "https://github.com/itsaayush29/EMP_Billing#readme",
   "description": "",
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
     "@types/node": "^25.5.0",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.3.1",
     "mocha": "^11.7.4",
     "selenium-webdriver": "^4.30.0"

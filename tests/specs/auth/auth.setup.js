@@ -1,7 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { Builder } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { describe, it, afterEach } from 'mocha';
@@ -11,30 +9,44 @@ import { login } from '../../utils/auth.js';
 
 dotenv.config({ quiet: true });
 
-const execFileAsync = promisify(execFile);
-
 const authFile = 'playwright/.auth/user.json';
 const baseUrl = process.env.BASE_URL || 'https://test-billing.empcloud.com';
 
 async function resolveChromePaths() {
-  const managerPath = path.resolve('node_modules/selenium-webdriver/bin/windows/selenium-manager.exe');
-  const { stdout } = await execFileAsync(managerPath, [
-    '--browser',
-    'chrome',
-    '--language-binding',
-    'javascript',
-    '--output',
-    'json',
-  ]);
-  const parsed = JSON.parse(stdout);
+  const browserCandidates = [
+    process.env.CHROME_BIN,
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ].filter(Boolean);
 
-  if (parsed?.result?.code !== 0 || !parsed?.result?.driver_path || !parsed?.result?.browser_path) {
-    throw new Error(`Unable to resolve Chrome paths from Selenium Manager: ${stdout}`);
+  let browserPath;
+
+  for (const candidate of browserCandidates) {
+    try {
+      await fs.access(candidate);
+      browserPath = candidate;
+      break;
+    } catch {
+      // Try the next Chrome location.
+    }
+  }
+
+  if (!browserPath) {
+    throw new Error('Unable to locate chrome.exe. Set CHROME_BIN to your Chrome executable path.');
+  }
+
+  const driverRoot = path.join(process.env.USERPROFILE || '', '.cache', 'selenium', 'chromedriver', 'win64');
+  const driverVersions = await fs.readdir(driverRoot, { withFileTypes: true });
+  const versionNames = driverVersions.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  const latestVersion = versionNames.at(-1);
+
+  if (!latestVersion) {
+    throw new Error('Unable to locate a cached ChromeDriver. Run Selenium Manager once or install ChromeDriver.');
   }
 
   return {
-    driverPath: parsed.result.driver_path,
-    browserPath: parsed.result.browser_path,
+    driverPath: path.join(driverRoot, latestVersion, 'chromedriver.exe'),
+    browserPath,
   };
 }
 
@@ -83,6 +95,15 @@ describe('authenticate once for protected modules', function () {
   it('authenticate once for protected modules', async function () {
     const options = new chrome.Options();
     const { driverPath, browserPath } = await resolveChromePaths();
+    const profileDir = await fs.mkdtemp(path.join(process.cwd(), '.tmp-chrome-profile-'));
+
+    options.addArguments('--disable-dev-shm-usage');
+    options.addArguments('--no-sandbox');
+    options.addArguments('--disable-gpu');
+    options.addArguments('--remote-debugging-port=0');
+    options.addArguments(`--user-data-dir=${profileDir}`);
+    options.addArguments('--no-first-run');
+    options.addArguments('--no-default-browser-check');
 
     if (process.env.HEADLESS !== 'false') {
       options.addArguments('--headless=new');
