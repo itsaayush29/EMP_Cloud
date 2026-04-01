@@ -28,17 +28,23 @@ export async function resolveChromePaths() {
   }
 
   const driverRoot = path.join(process.env.USERPROFILE || '', '.cache', 'selenium', 'chromedriver', 'win64');
-  const driverVersions = await fs.readdir(driverRoot, { withFileTypes: true });
-  const versionNames = driverVersions.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
-  const latestVersion = versionNames.at(-1);
+  let driverPath;
 
-  if (!latestVersion) {
-    throw new Error('Unable to locate a cached ChromeDriver. Run Selenium Manager once or install ChromeDriver.');
+  try {
+    const driverVersions = await fs.readdir(driverRoot, { withFileTypes: true });
+    const versionNames = driverVersions.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+    const latestVersion = versionNames.at(-1);
+
+    if (latestVersion) {
+      driverPath = path.join(driverRoot, latestVersion, 'chromedriver.exe');
+    }
+  } catch {
+    // Fall back to Selenium Manager when no cached ChromeDriver is present yet.
   }
 
   return {
     browserPath,
-    driverPath: path.join(driverRoot, latestVersion, 'chromedriver.exe'),
+    driverPath,
   };
 }
 
@@ -65,11 +71,13 @@ export async function createDriver() {
 
   options.setChromeBinaryPath(browserPath);
 
-  const driver = await new Builder()
-    .forBrowser('chrome')
-    .setChromeOptions(options)
-    .setChromeService(new chrome.ServiceBuilder(driverPath))
-    .build();
+  const builder = new Builder().forBrowser('chrome').setChromeOptions(options);
+
+  if (driverPath) {
+    builder.setChromeService(new chrome.ServiceBuilder(driverPath));
+  }
+
+  const driver = await builder.build();
 
   return { driver, profileDir };
 }

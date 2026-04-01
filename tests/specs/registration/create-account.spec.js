@@ -10,6 +10,7 @@ import { waitForVisible, isVisible } from '../../framework/support/waits.js';
 import { waitForUrl } from '../../framework/core/navigation.js';
 import { LoginPage } from '../../pages/auth/login.page.js';
 import { RegistrationPage } from '../../pages/auth/registration.page.js';
+import { OnboardingPage } from '../../pages/onboarding/onboarding.page.js';
 
 function isTransientNavigationError(error) {
   const message = String(error?.message || '').toLowerCase();
@@ -72,7 +73,8 @@ async function waitForRegistrationForm(driver, timeout = 30000) {
   return driver.wait(async () => {
     try {
       const url = await getCurrentUrlSafe(driver);
-      if (url && /\/onboarding\/?$/.test(url)) {
+      // Leave this wait if the app has already moved us to the onboarding flow.
+      if (url && /\/onboarding/.test(new URL(url).pathname)) {
         return false;
       }
 
@@ -218,13 +220,15 @@ async function readTrackedResponseState(driver, key) {
     });
 }
 
-// Inject a small script on the page to suppress window.close/window.open for the registration flow only.
-// This prevents the app from closing the browser/tab during the rapid redirect chain.
+// ---------------------------------------------------------------------------
+// suppressWindowClose
+// Used ONLY for validation-error tests (missingFirstName, invalidEmail) where
+// we deliberately want the page to stay put after clicking submit.
+// ---------------------------------------------------------------------------
 async function suppressWindowClose(driver) {
   try {
     await driver.executeScript(
       `
-        // Backup originals so we can still log if needed
         (function(){
           if (!window.__empTestHelpers) {
             window.__empTestHelpers = {};
@@ -247,67 +251,195 @@ async function suppressWindowClose(driver) {
     );
   } catch (error) {
     if (isTransientNavigationError(error)) {
-      // If the frame detached while installing the suppression, ignore — navigation likely started.
       return;
     }
     throw error;
   }
 }
 
-async function submitAndAwaitRedirectChain(driver, { networkKey = null, finalPattern = /\/onboarding\/?$/, timeout = 60000 } = {}) {
-  // Install suppression only for this spec run to prevent the app from closing the window.
-  await suppressWindowClose(driver);
+// ---------------------------------------------------------------------------
+// submitAndAwaitRedirectChain
+//
+// Clicks the Create Account button and then follows the redirect chain using
+// Selenium's native window-handle management — no JS window.close patching.
+//
+// The app may react to the registration submit in one of several ways:
+//   1. SPA route change   → same window, URL updates to /onboarding (or a sub-route).
+//   2. window.open()      → a new browser window/tab opens containing /onboarding.
+//   3. window.open()      → new window opens, then app calls window.close() on the
+//                           original; Selenium loses the old handle automatically.
+//
+// All three cases are handled by monitoring getAllWindowHandles() and the
+// current URL on every polling tick.
+// ---------------------------------------------------------------------------
+async function submitAndAwaitRedirectChain(driver, {
+  networkKey = null,
+  // Match any URL whose *pathname* begins with /onboarding so that sub-routes
+  // like /onboarding/step/1 or /onboarding?locale=en are also accepted.
+  finalPattern = /^\/onboarding/,
+  timeout = 60000,
+} = {}) {
+  // Snapshot the currently open windows before clicking.
+  const knownHandles = new Set(await driver.getAllWindowHandles());
 
-  // Attempt the click but tolerate transient errors from navigation
+  // Click submit — tolerate transient detach errors caused by fast navigation.
   try {
     await safeClick(driver, RegistrationPage.createFreeAccountButton, 'create free account button');
   } catch (error) {
     if (!isTransientNavigationError(error)) {
       throw error;
     }
-    // If the click failed because the frame detached, it likely means navigation started.
-    console.warn('Transient error during click, continuing to wait for navigation...');
+    console.warn('Transient error during submit click — navigation likely started, continuing poll...');
   }
 
-  const start = Date.now();
-  const deadline = start + timeout;
+  const deadline = Date.now() + timeout;
 
-  // If a network tracker key is provided, wait for the API response in parallel while watching URL.
   while (Date.now() < deadline) {
-    const currentUrl = await getCurrentUrlSafe(driver);
-    if (currentUrl) {
-      const pathname = new URL(currentUrl).pathname;
-
-      // Final success state
-      if (finalPattern.test(pathname)) {
-        return currentUrl;
+    try {
+      // ── 1. Discover any new windows the app opened ──────────────────────
+      const allHandles = await driver.getAllWindowHandles();
+      for (const handle of allHandles) {
+        if (!knownHandles.has(handle)) {
+          console.log(`New window detected (handle: ${handle}), switching to it...`);
+          await driver.switchTo().window(handle);
+          knownHandles.add(handle);
+        }
       }
 
-      // Allowed intermediate transient state (app briefly navigates to '/')
-      if (pathname === '/') {
-        // keep waiting until finalPattern appears
+      // ── 2. Check whether we have reached the target URL ────────────────
+      const currentUrl = await getCurrentUrlSafe(driver);
+      if (currentUrl) {
+        const pathname = new URL(currentUrl).pathname;
+
+        if (finalPattern.test(pathname)) {
+          console.log(`Reached target URL: ${currentUrl}`);
+          return currentUrl;
+        }
+
+        // The app may briefly route through '/' or '/dashboard' — keep waiting.
+      }
+    } catch (error) {
+      // The original window may have been closed by the app.  Try to recover by
+      // switching to any remaining window and continuing the poll.
+      if (isTransientNavigationError(error)) {
+        try {
+          const remaining = await driver.getAllWindowHandles();
+          if (remaining.length > 0) {
+            const target = remaining.find((h) => !knownHandles.has(h)) ?? remaining.at(-1);
+            await driver.switchTo().window(target);
+            knownHandles.add(target);
+          }
+        } catch {
+          // ignore secondary switch errors
+        }
+      } else {
+        throw error;
       }
     }
 
-    // If networkKey provided, check whether the tracked response arrived and was successful
+    // Check network tracker (informational — does not gate the URL wait).
     if (networkKey) {
-      const status = await readTrackedResponseState(driver, networkKey).catch(() => null);
-      if (status && typeof status.lastStatus === 'number') {
-        // If the API returned success (201) we can keep waiting for final URL; continue
-        // No immediate action here, but presence indicates server processed registration
-      }
+      await readTrackedResponseState(driver, networkKey).catch(() => null);
     }
 
     await driver.sleep(250);
   }
 
-  // As a last attempt, try to explicitly wait for the final URL to appear using existing helper
-  try {
-    await waitForUrl(driver, finalPattern, 5000);
-    return await getCurrentUrlSafe(driver);
-  } catch (err) {
-    throw new Error(`Timeout waiting for redirect chain to final onboarding within ${timeout}ms`);
+  const finalUrl = await getCurrentUrlSafe(driver);
+  throw new Error(
+    `Timeout (${timeout}ms) waiting for redirect to pattern ${finalPattern}. ` +
+    `Last URL: ${finalUrl ?? 'unknown'}`
+  );
+}
+
+// ---------------------------------------------------------------------------
+// completeOnboardingStep
+//
+// Handles a single onboarding wizard step:
+//   1. Waits for the step content to stabilise.
+//   2. Fills any required fields for that step (add locators to
+//      OnboardingPage and call safeFill / safeClick here as needed).
+//   3. Clicks the primary Continue / Next / Finish button.
+// ---------------------------------------------------------------------------
+async function completeOnboardingStep(driver, stepNumber) {
+  console.log(`Completing onboarding step ${stepNumber}/5...`);
+
+  // Give the SPA time to render the new step before interacting.
+  await driver.sleep(1500);
+
+  // ── Step-specific field filling ─────────────────────────────────────────
+  // Uncomment and extend the blocks below once you know the exact field names
+  // that appear on each onboarding step.
+  //
+  // if (stepNumber === 1) {
+  //   await safeFill(driver, OnboardingPage.step1ExampleField, 'value', 'field label');
+  // }
+  // if (stepNumber === 2) {
+  //   await safeFill(driver, OnboardingPage.step2ExampleField, 'value', 'field label');
+  // }
+  // … and so on for steps 3-5.
+  // ────────────────────────────────────────────────────────────────────────
+
+  // Click the primary CTA (Continue / Next / Finish).
+  // First try the text-based XPath; fall back to the CSS brand-button selector.
+  let clicked = false;
+  for (const locator of [OnboardingPage.continueButton, OnboardingPage.primaryButton]) {
+    try {
+      await safeClick(driver, locator, `onboarding step ${stepNumber} continue button`);
+      clicked = true;
+      break;
+    } catch {
+      // Try the next locator.
+    }
   }
+
+  if (!clicked) {
+    throw new Error(
+      `Could not locate a Continue/Next/Finish button on onboarding step ${stepNumber}. ` +
+      'Add the correct locator to OnboardingPage.continueButton or OnboardingPage.primaryButton.'
+    );
+  }
+
+  console.log(`Onboarding step ${stepNumber} submitted.`);
+}
+
+// ---------------------------------------------------------------------------
+// completeOnboarding
+//
+// Drives the full 5-step onboarding wizard that appears after registration.
+// After the final step the app redirects away from /onboarding (typically to
+// the dashboard).  The function returns the URL the driver ends up at.
+// ---------------------------------------------------------------------------
+async function completeOnboarding(driver) {
+  console.log('Beginning onboarding wizard...');
+
+  // Safety check — ensure the driver is on an onboarding URL before starting.
+  await waitForUrl(driver, /\/onboarding/, 15000);
+
+  for (let step = 1; step <= 5; step++) {
+    await completeOnboardingStep(driver, step);
+
+    // After each step check if the app has already moved us off /onboarding
+    // (the redirect can happen earlier than step 5 if the wizard is shorter).
+    const url = await getCurrentUrlSafe(driver);
+    if (url) {
+      const pathname = new URL(url).pathname;
+      if (!/\/onboarding/.test(pathname)) {
+        console.log(`Onboarding finished after step ${step}. Redirected to: ${url}`);
+        return url;
+      }
+    }
+  }
+
+  // If we are still on /onboarding after all steps, wait for the redirect.
+  await driver.wait(async () => {
+    const url = await getCurrentUrlSafe(driver);
+    return Boolean(url && !/\/onboarding/.test(new URL(url).pathname));
+  }, 15000, 'Expected to leave /onboarding after completing all onboarding steps');
+
+  const finalUrl = await getCurrentUrlSafe(driver);
+  console.log(`Onboarding completed. Final URL: ${finalUrl}`);
+  return finalUrl;
 }
 
 describe('Registration Page Flow', function () {
@@ -334,15 +466,22 @@ describe('Registration Page Flow', function () {
       await fillRegistrationForm(driver, registrationScenarios.validRegistration.user);
       await trackNetworkResponse(driver, 'registerAccount', '/auth/register');
 
-      // Submit and wait for the redirect chain (this tolerates a brief '/' transient navigation)
-      await submitAndAwaitRedirectChain(driver, { networkKey: 'registerAccount', finalPattern: /\/onboarding\/?$/, timeout: 60000 });
+      // Submit and follow the full redirect chain (registration → dashboard → onboarding).
+      // submitAndAwaitRedirectChain uses Selenium window-handle polling — no JS patching.
+      await submitAndAwaitRedirectChain(driver, {
+        networkKey: 'registerAccount',
+        finalPattern: /^\/onboarding/,
+        timeout: 60000,
+      });
 
       console.log('Waiting for registration network response...');
       const responseStatus = await waitForTrackedResponse(driver, 'registerAccount', 30000);
       assert.equal(responseStatus, 201, `Expected registration API status to be 201, received ${responseStatus}.`);
 
-      // Confirm final onboarding URL is reached
-      await waitForUrl(driver, /\/onboarding\/?$/, 30000);
+      // Complete all 5 onboarding steps in the same browser session.
+      await completeOnboarding(driver);
+
+      console.log('Registration and onboarding completed successfully.');
     } catch (error) {
       console.error('Registration flow failed:', error.message);
       await captureFailure(driver, 'registration-error');
