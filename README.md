@@ -1,6 +1,20 @@
 # EMP Billing Selenium Suite
 
-Selenium WebDriver end-to-end tests for the EMP Billing application.
+End-to-end Selenium WebDriver automation for the EMP Billing application. This suite covers authentication, shared session setup, public registration, and the onboarding flow that follows account creation.
+
+## What This Project Covers
+
+- Login validation and authentication scenarios
+- Shared authenticated session setup for reuse across flows
+- Public account registration
+- Post-registration onboarding and initial setup
+
+## Tech Stack
+
+- Node.js 20+
+- Selenium WebDriver
+- Mocha
+- Chrome
 
 ## Project Structure
 
@@ -39,17 +53,17 @@ tests/
       create-account.spec.js
 ```
 
-## Setup
+## Getting Started
 
-1. Use Node.js `20+`.
-
-2. Install dependencies:
+1. Install Node.js 20 or later.
+2. Install Google Chrome on the machine where the tests will run.
+3. Install dependencies:
 
 ```bash
 npm install
 ```
 
-3. Configure `.env`:
+4. Create a `.env` file in the project root:
 
 ```env
 BASE_URL=https://test-billing.empcloud.com
@@ -59,16 +73,13 @@ TIMEOUT=60000
 HEADLESS=true
 ```
 
-`ADMIN_EMAIL` and `ADMIN_PASSWORD` are required for the authentication flow.
-The shared auth setup saves a Selenium session snapshot under `selenium/.auth/` so one-time authentication can be reused where needed.
+## Environment Notes
 
-4. Make sure Google Chrome is installed on the machine.
+- `ADMIN_EMAIL` and `ADMIN_PASSWORD` are required for authentication-related flows.
+- `HEADLESS=true` runs Chrome in headless mode by default.
+- The shared auth setup stores reusable session data under `selenium/.auth/`.
 
-Selenium uses the `selenium-webdriver` package. This repo launches Chrome for authentication and registration flows.
-
-## Running Tests
-
-Current runnable Selenium commands:
+## Available Scripts
 
 ```bash
 npm test
@@ -79,16 +90,16 @@ npm run test:headed
 npm run test:headless
 ```
 
-What each command does:
+## Script Details
 
-- `npm test`: runs the login suite, shared authentication setup, and then the registration suite
-- `npm run test:login`: runs the Selenium login scenarios
-- `npm run test:auth-setup`: runs the shared authentication and session setup explicitly
-- `npm run test:registration`: runs the public registration flow and the onboarding/setup flow that follows account creation
-- `npm run test:headed`: runs the authentication and registration flows with the browser visible
-- `npm run test:headless`: runs the authentication and registration flows in headless mode
+- `npm test` runs login, shared authentication setup, and registration in sequence.
+- `npm run test:login` runs the authentication/login scenarios.
+- `npm run test:auth-setup` generates the shared authenticated session.
+- `npm run test:registration` runs account creation and onboarding coverage.
+- `npm run test:headed` runs the full suite with a visible browser.
+- `npm run test:headless` runs the full suite in headless mode.
 
-Typical local workflow:
+## Recommended Local Workflow
 
 ```bash
 npm install
@@ -97,35 +108,31 @@ npm run test:auth-setup
 npm run test:registration
 ```
 
-If you want to run without opening the browser:
+For a browserless run:
 
 ```bash
 npm run test:headless
 ```
 
-If Chrome fails to launch from a restricted terminal on Windows, run the same command from a normal local PowerShell or Command Prompt window.
+## Coverage Summary
 
-## Test Coverage
+- Authentication coverage includes valid login, invalid login, invalid email validation, password masking, and multi-click protection.
+- Registration coverage includes public signup and the onboarding/setup flow after account creation.
 
-- `authentication`: login, one-time authentication, and saved session handling
-  Login coverage includes valid login, invalid login, invalid email format validation, password masking, and multi-click protection.
-- `registration`: public registration flow from account creation through onboarding completion
+## Implementation Notes
 
-## Notes
+- Environment values are loaded from `.env`.
+- Authentication credentials are kept in environment variables instead of hardcoded in specs.
+- Registration and onboarding data generate unique values per run to reduce collisions.
+- Shared browser, network, storage, and interaction helpers live under `tests/framework/`.
+- Page objects are organized under `tests/pages/`.
 
-- `.env` values are loaded quietly to keep test output readable.
-- The repo is wired to run with Selenium WebDriver and Mocha.
-- Authentication credentials are read from environment variables instead of hardcoding them in specs.
-- Registration test data generates unique emails and organization names per run to reduce collisions.
-- Onboarding test data generates unique invite emails per run to reduce collisions.
-- Authentication and registration specs are grouped under `tests/specs/`.
-- Shared browser, session, network, and interaction code lives under `tests/framework/`.
-- Auth and onboarding page objects live under `tests/pages/`.
-- Authentication runs through `tests/specs/auth/auth.setup.js` first so the saved session handling remains intact.
-- The registration spec currently covers the post-registration onboarding wizard, including module selection and final setup submission.
+## Troubleshooting
+
+- If Chrome fails to launch from a restricted terminal on Windows, run the same command from a normal PowerShell or Command Prompt session.
+- Sandbox or restricted environments may fail with errors such as `DevToolsActivePort file doesn't exist` or `Access is denied` even when the same command works outside the sandbox.
 
 ## Verification
 
-- The install and run steps above match the current package scripts.
-- `npm run test:registration` was verified successfully in a normal Windows PowerShell session.
-- In this workspace, Chrome launch may fail under restricted/sandboxed terminals on Windows with `DevToolsActivePort file doesn't exist` or `Access is denied`, even when the same command works outside the sandbox.
+- The commands in this README match the current scripts defined in `package.json`.
+- The documented test structure matches the files currently present in `tests/`.
